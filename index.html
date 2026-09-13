@@ -202,6 +202,10 @@ h1 {
   box-shadow: 0 0 40px rgba(139, 0, 0, 0.5);
 }
 
+.tier-label.small-text {
+  font-size: 20px;
+}
+
 .tier-info {
   flex: 1;
 }
@@ -431,15 +435,17 @@ h1 {
   <div class="container" id="tierContainer"></div>
 
   <script>
-    const TIERS = [
-      { name: 'S', label: 'Великолепно', min: 500, max: Infinity, class: 'tier-S' },
-      { name: 'A', label: 'Отлично', min: 300, max: 499, class: 'tier-A' },
-      { name: 'B', label: 'Хорошо', min: 100, max: 299, class: 'tier-B' },
-      { name: 'C', label: 'Средне', min: -99, max: 99, class: 'tier-C' },
-      { name: 'D', label: 'Плохо', min: -299, max: -100, class: 'tier-D' },
-      { name: 'F', label: 'Очень плохо', min: -499, max: -300, class: 'tier-F' },
-      { name: 'G', label: 'Ужасно', min: -Infinity, max: -500, class: 'tier-G' }
+    // Группы формируются не по величине ауры, а по месту в рейтинге:
+    // ТОП-3 — первые 3 места, ТОП-5 — следующие 5 мест (4-8) и т.д.
+    const GROUPS = [
+      { name: 'ТОП-3', size: 3, class: 'tier-S' },
+      { name: 'ТОП-5', size: 5, class: 'tier-A' },
+      { name: 'ТОП-10', size: 10, class: 'tier-B' },
+      { name: 'ТОП-20', size: 20, class: 'tier-C' },
+      { name: 'ТОП-30', size: 30, class: 'tier-D' }
     ];
+    // Все, кто не поместился в группы выше
+    const REST_GROUP = { name: 'Остальные', class: 'tier-G' };
 
     let voterId = localStorage.getItem('voter_id');
     if (!voterId) {
@@ -493,42 +499,62 @@ h1 {
         const tierContainer = document.getElementById('tierContainer');
         tierContainer.innerHTML = '';
 
-        TIERS.forEach(tier => {
-          const tierUsers = users.filter(user => {
-            const aura = user.aura || 0;
-            return aura >= tier.min && aura <= tier.max;
+        // Сервер уже отдаёт пользователей отсортированными по aura (по убыванию),
+        // но сортируем ещё раз на всякий случай, чтобы места считались верно.
+        const sortedUsers = [...users].sort((a, b) => (b.aura || 0) - (a.aura || 0));
+
+        // Разбиваем отсортированный список на группы по местам:
+        // ТОП-3 -> места 1-3, ТОП-5 -> места 4-8, ТОП-10 -> места 9-18 и т.д.
+        let cursor = 0;
+        const slices = [];
+
+        GROUPS.forEach(group => {
+          if (cursor >= sortedUsers.length) return;
+          const slice = sortedUsers.slice(cursor, cursor + group.size);
+          if (slice.length === 0) return;
+          const startPlace = cursor + 1;
+          const endPlace = cursor + slice.length;
+          slices.push({ ...group, users: slice, startPlace, endPlace });
+          cursor += group.size;
+        });
+
+        // Всё, что осталось после ТОП-30, попадает в общую группу "Остальные"
+        if (cursor < sortedUsers.length) {
+          const slice = sortedUsers.slice(cursor);
+          slices.push({
+            ...REST_GROUP,
+            users: slice,
+            startPlace: cursor + 1,
+            endPlace: sortedUsers.length
           });
+        }
 
-          // Не отображаем пустые tier'ы
-          if (tierUsers.length === 0) {
-            return;
-          }
-
+        slices.forEach(group => {
           const section = document.createElement('div');
           section.className = 'tier-section';
 
-          const range = tier.max === Infinity ? `${tier.min}+` :
-                        tier.min === -Infinity ? `${tier.max}−` :
-                        `${tier.min} — ${tier.max}`;
+          const placeRange = group.startPlace === group.endPlace ?
+            `Место ${group.startPlace}` :
+            `Места ${group.startPlace}–${group.endPlace}`;
+
+          const labelClass = group.name.length > 3 ? 'tier-label small-text' : 'tier-label';
 
           section.innerHTML = `
             <div class="tier-header">
-              <div class="tier-label ${tier.class}">${tier.name}</div>
+              <div class="${labelClass} ${group.class}">${group.name}</div>
               <div class="tier-info">
-                <div class="tier-name">${tier.label}</div>
-                <div class="tier-range">aura: ${range}</div>
+                <div class="tier-name">${group.name}</div>
+                <div class="tier-range">${placeRange}</div>
               </div>
             </div>
-            <div class="users-grid" id="tier-${tier.name}"></div>
+            <div class="users-grid" id="tier-${group.name}"></div>
           `;
 
           tierContainer.appendChild(section);
 
-          const grid = document.getElementById(`tier-${tier.name}`);
+          const grid = document.getElementById(`tier-${group.name}`);
 
-          tierUsers
-            .sort((a, b) => (b.aura || 0) - (a.aura || 0))
-            .forEach((user) => {
+          group.users.forEach((user) => {
               const card = document.createElement('div');
               card.className = 'user-card';
 
