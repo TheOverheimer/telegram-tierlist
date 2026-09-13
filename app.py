@@ -145,7 +145,7 @@ def can_vote():
 
         if time_diff < timedelta(hours=3):
             remaining = timedelta(hours=3) - time_diff
-            minutes = int(remaining.total_seconds / 60)
+            minutes = int(remaining.total_seconds() / 60)
             active_votes.append({
                 'user_id': target_user_id,
                 'minutes_left': minutes
