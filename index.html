@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tier List участников</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap');
+
+:root {
+  --bg-deep: #0f0620;
+  --bg-surface: #1b0f33;
+  --bg-surface-2: #241442;
+  --border-subtle: rgba(180, 95, 255, 0.16);
+  --accent-primary: #b45fff;
+  --accent-secondary: #ff6fd8;
+  --accent-teal: #4ce0b3;
+  --text-primary: #f1e9ff;
+  --text-muted: #9c86c4;
+  --shadow-glow: 0 0 50px rgba(180, 95, 255, 0.22);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 15% -10%, #33176a 0%, transparent 45%),
+    radial-gradient(circle at 90% 10%, #3a1150 0%, transparent 40%),
+    var(--bg-deep);
+  background-attachment: fixed;
+  padding: 20px;
+}
+
+.header {
+  max-width: 1520px;
+  margin: 0 auto 32px;
+}
+
+.chat-info {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.chat-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid var(--accent-primary);
+  box-shadow: 0 0 20px rgba(180, 95, 255, 0.5);
+}
+
+.chat-name {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 24px;
+  font-weight: 600;
+  background: linear-gradient(120deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+h1 {
+  text-align: center;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(120deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 24px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.vote-status {
+  background: linear-gradient(160deg, rgba(36, 20, 66, 0.92), rgba(24, 13, 46, 0.92));
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  padding: 16px 28px;
+  margin: 0 auto 32px;
+  max-width: 600px;
+  text-align: center;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.vote-status.can-vote {
+  border-color: var(--accent-teal);
+  box-shadow: 0 0 20px rgba(76, 224, 179, 0.3);
+}
+
+.vote-status.no-votes {
+  border-color: #ff9800;
+  box-shadow: 0 0 20px rgba(255, 152, 0, 0.3);
+}
+
+.votes-available {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+}
+
+.vote-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+
+.vote-dot.active {
+  background: var(--accent-teal);
+  box-shadow: 0 0 8px var(--accent-teal);
+}
+
+.vote-dot.used {
+  background: var(--text-muted);
+  opacity: 0.3;
+}
+
+.container {
+  max-width: 1520px;
+  margin: 0 auto;
+}
+
+.tier-section {
+  margin-bottom: 28px;
+}
+
+.tier-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 18px;
+}
+
+.tier-label {
+  width: 70px;
+  height: 70px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 36px;
+  font-weight: 900;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+.tier-S {
+  background: linear-gradient(135deg, #ff0080 0%, #ff8c00 100%);
+  color: #fff;
+  box-shadow: 0 0 40px rgba(255, 0, 128, 0.5);
+}
+
+.tier-A {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  color: #12071f;
+  box-shadow: 0 0 40px rgba(255, 215, 0, 0.5);
+}
+
+.tier-B {
+  background: linear-gradient(135deg, #32cd32 0%, #90ee90 100%);
+  color: #12071f;
+  box-shadow: 0 0 40px rgba(50, 205, 50, 0.5);
+}
+
+.tier-C {
+  background: linear-gradient(135deg, #1e90ff 0%, #87ceeb 100%);
+  color: #fff;
+  box-shadow: 0 0 40px rgba(30, 144, 255, 0.5);
+}
+
+.tier-D {
+  background: linear-gradient(135deg, #9370db 0%, #ba55d3 100%);
+  color: #fff;
+  box-shadow: 0 0 40px rgba(147, 112, 219, 0.5);
+}
+
+.tier-F {
+  background: linear-gradient(135deg, #ff6347 0%, #ff4500 100%);
+  color: #fff;
+  box-shadow: 0 0 40px rgba(255, 99, 71, 0.5);
+}
+
+.tier-G {
+  background: linear-gradient(135deg, #8b0000 0%, #dc143c 100%);
+  color: #fff;
+  box-shadow: 0 0 40px rgba(139, 0, 0, 0.5);
+}
+
+.tier-info {
+  flex: 1;
+}
+
+.tier-name {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.tier-range {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.users-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 16px;
+  padding: 24px;
+  background: linear-gradient(160deg, rgba(36, 20, 66, 0.92), rgba(24, 13, 46, 0.92));
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-glow);
+}
+
+.user-card {
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 18px 14px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.user-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(180, 95, 255, 0.15), transparent);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.user-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent-primary);
+  box-shadow: 0 8px 24px rgba(180, 95, 255, 0.35);
+}
+
+.user-card:hover::before {
+  opacity: 1;
+}
+
+.user-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid var(--accent-primary);
+  margin: 0 auto 12px;
+  display: block;
+  box-shadow: 0 0 15px rgba(180, 95, 255, 0.4);
+}
+
+.user-info {
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-username {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent-primary);
+  font-size: 12px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-aura {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  margin: 10px 0;
+}
+
+.user-aura.positive {
+  color: var(--accent-teal);
+  text-shadow: 0 0 12px var(--accent-teal);
+}
+
+.user-aura.negative {
+  color: #ff6b6b;
+  text-shadow: 0 0 12px #ff6b6b;
+}
+
+.user-aura.zero {
+  color: var(--text-muted);
+}
+
+.aura-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 6px;
+}
+
+.vote-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.vote-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.vote-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.15);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.vote-btn:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.vote-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.vote-btn.upvote {
+  background: linear-gradient(120deg, var(--accent-teal), #3bc99d);
+  color: #12071f;
+  box-shadow: 0 4px 14px rgba(76, 224, 179, 0.4);
+}
+
+.vote-btn.upvote:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(76, 224, 179, 0.5);
+}
+
+.vote-btn.downvote {
+  background: linear-gradient(120deg, #ff6b6b, #ff4757);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(255, 107, 107, 0.4);
+}
+
+.vote-btn.downvote:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(255, 107, 107, 0.5);
+}
+
+
+@media (max-width: 768px) {
+  .users-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+    padding: 18px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .tier-label {
+    width: 56px;
+    height: 56px;
+    font-size: 28px;
+  }
+
+  .chat-name {
+    font-size: 20px;
+  }
+
+  .tier-header {
+    gap: 14px;
+  }
+}
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="chat-info">
+      <img id="chatAvatar" src="" alt="Chat" class="chat-avatar" style="display: none;">
+      <div id="chatName" class="chat-name"></div>
+    </div>
+    <h1>🏆 Tier List 🏆</h1>
+    <div id="voteStatus" class="vote-status"></div>
+  </div>
+
+  <div class="container" id="tierContainer"></div>
+
+  <script>
+    const TIERS = [
+      { name: 'S', label: 'Великолепно', min: 500, max: Infinity, class: 'tier-S' },
+      { name: 'A', label: 'Отлично', min: 300, max: 499, class: 'tier-A' },
+      { name: 'B', label: 'Хорошо', min: 100, max: 299, class: 'tier-B' },
+      { name: 'C', label: 'Средне', min: -99, max: 99, class: 'tier-C' },
+      { name: 'D', label: 'Плохо', min: -299, max: -100, class: 'tier-D' },
+      { name: 'F', label: 'Очень плохо', min: -499, max: -300, class: 'tier-F' },
+      { name: 'G', label: 'Ужасно', min: -Infinity, max: -500, class: 'tier-G' }
+    ];
+
+    let voterId = localStorage.getItem('voter_id');
+    if (!voterId) {
+      voterId = 'voter_' + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('voter_id', voterId);
+    }
+
+    async function checkVoteStatus() {
+      try {
+        const response = await fetch('/api/can_vote', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({voter_id: voterId})
+        });
+        const data = await response.json();
+
+        const statusDiv = document.getElementById('voteStatus');
+        const available = data.votes_available || 0;
+
+        let dotsHtml = '<div class="votes-available">';
+        for (let i = 0; i < 5; i++) {
+          dotsHtml += `<div class="vote-dot ${i < available ? 'active' : 'used'}"></div>`;
+        }
+        dotsHtml += '</div>';
+
+        if (available > 0) {
+          statusDiv.className = 'vote-status can-vote';
+          statusDiv.innerHTML = `<div style="color: var(--accent-teal);">✅ Доступно голосов: ${available}/5</div>${dotsHtml}`;
+        } else {
+          statusDiv.className = 'vote-status no-votes';
+          const nextVote = data.votes_details && data.votes_details[0];
+          const minutesText = nextVote ? `через ${nextVote.minutes_left} минут` : 'скоро';
+          statusDiv.innerHTML = `<div style="color: #ff9800;">⏰ Все голоса использованы. Следующий ${minutesText}</div>${dotsHtml}`;
+        }
+
+        return data;
+      } catch (error) {
+        console.error('Ошибка проверки статуса:', error);
+        return { can_vote: false, votes_available: 0 };
+      }
+    }
+
+    async function loadUsers() {
+      try {
+        const response = await fetch('/api/users');
+        const users = await response.json();
+
+        const voteStatus = await checkVoteStatus();
+        const canVote = voteStatus.votes_available > 0;
+
+        const tierContainer = document.getElementById('tierContainer');
+        tierContainer.innerHTML = '';
+
+        TIERS.forEach(tier => {
+          const tierUsers = users.filter(user => {
+            const aura = user.aura || 0;
+            return aura >= tier.min && aura <= tier.max;
+          });
+
+          // Не отображаем пустые tier'ы
+          if (tierUsers.length === 0) {
+            return;
+          }
+
+          const section = document.createElement('div');
+          section.className = 'tier-section';
+
+          const range = tier.max === Infinity ? `${tier.min}+` :
+                        tier.min === -Infinity ? `${tier.max}−` :
+                        `${tier.min} — ${tier.max}`;
+
+          section.innerHTML = `
+            <div class="tier-header">
+              <div class="tier-label ${tier.class}">${tier.name}</div>
+              <div class="tier-info">
+                <div class="tier-name">${tier.label}</div>
+                <div class="tier-range">aura: ${range}</div>
+              </div>
+            </div>
+            <div class="users-grid" id="tier-${tier.name}"></div>
+          `;
+
+          tierContainer.appendChild(section);
+
+          const grid = document.getElementById(`tier-${tier.name}`);
+
+          tierUsers
+            .sort((a, b) => (b.aura || 0) - (a.aura || 0))
+            .forEach((user) => {
+              const card = document.createElement('div');
+              card.className = 'user-card';
+
+              const aura = user.aura || 0;
+              let auraClass = 'zero';
+              if (aura > 0) auraClass = 'positive';
+              if (aura < 0) auraClass = 'negative';
+
+              const displayName = user.first_name + (user.last_name ? ' ' + user.last_name : '');
+              const username = user.username ? '@' + user.username : '';
+              const avatarUrl = user.photo_url || 'https://via.placeholder.com/64?text=' + (user.first_name[0] || '?');
+
+              card.innerHTML = `
+                <div class="user-info">
+                  <img src="${avatarUrl}" alt="${displayName}" class="user-avatar" onerror="this.src='https://via.placeholder.com/64?text=?'">
+                  <div class="user-name">${displayName}</div>
+                  <div class="user-username">${username}</div>
+                  <div class="aura-label">aura</div>
+                  <div class="user-aura ${auraClass}">${aura > 0 ? '+' : ''}${aura}</div>
+                </div>
+                <div class="vote-buttons">
+                  <button class="vote-btn upvote" onclick="vote(${user.id}, 100)" ${!canVote ? 'disabled' : ''}>+100</button>
+                  <button class="vote-btn downvote" onclick="vote(${user.id}, -100)" ${!canVote ? 'disabled' : ''}>-100</button>
+                </div>
+              `;
+
+              grid.appendChild(card);
+            });
+        });
+
+        const chatNameDiv = document.getElementById('chatName');
+        chatNameDiv.textContent = 'DigRock Chat';
+
+      } catch (error) {
+        console.error('Ошибка загрузки пользователей:', error);
+      }
+    }
+
+    async function vote(userId, amount) {
+      try {
+        const response = await fetch('/api/vote', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            user_id: userId,
+            voter_id: voterId,
+            amount: amount
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          const votesLeft = data.votes_left;
+          loadUsers();
+        } else {
+          alert('❌ ' + data.error);
+        }
+      } catch (error) {
+        console.error('Ошибка голосования:', error);
+        alert('❌ Ошибка при голосовании');
+      }
+    }
+
+    loadUsers();
+    setInterval(checkVoteStatus, 60000);
+  </script>
+</body>
+</html>
