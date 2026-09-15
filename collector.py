@@ -1,120 +1,128 @@
 import asyncio
-import json
 import os
 import logging
-from datetime import datetime
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.tl.functions.photos import GetUserPhotosRequest
 
-# Настройка логирования
+import db
+import config
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# Попытка импорта конфига
-try:
-    from config import API_ID, API_HASH, PHONE, CHAT_USERNAME, PASSWORD
-except ImportError:
-    # Для деплоя - берём из переменных окружения
-    API_ID = os.environ.get('API_ID')
-    API_HASH = os.environ.get('API_HASH')
-    PHONE = os.environ.get('PHONE')
-    CHAT_USERNAME = os.environ.get('CHAT_USERNAME')
-    PASSWORD = os.environ.get('PASSWORD', '')
+API_ID = config.API_ID
+API_HASH = config.API_HASH
+PHONE = config.PHONE
+PASSWORD = config.PASSWORD
+CHATS = config.CHATS  # [{'slug': ..., 'username': ..., 'title': ...}, ...]
 
-USERS_FILE = 'users.json'
+# Строка сессии берётся из config.py (SESSION_STRING). Она переживает
+# пересоздание контейнера на Render и не хранится в файле session.session.
+# Если SESSION_STRING пуста (например, при самом первом локальном запуске
+# до того, как вы её сгенерировали) — используется локальный файл session.session.
+SESSION_STRING = config.SESSION_STRING
+
+
+def _make_client():
+    if SESSION_STRING:
+        return TelegramClient(StringSession(SESSION_STRING), API_ID, API_HASH)
+    return TelegramClient('session', API_ID, API_HASH)
+
+
+async def _collect_one_chat(client, chat_cfg):
+    """Собирает участников одного чата и сохраняет их в Postgres.
+    aura существующих пользователей не трогается — только добавляются новые."""
+    slug = chat_cfg['slug']
+    username = chat_cfg['username']
+
+    if not username:
+        logger.warning(f"⚠️ У чата '{slug}' не задан username, пропускаем")
+        return 0
+
+    chat_id = db.get_or_create_chat(slug, telegram_username=username, title=chat_cfg.get('title'))
+
+    chat = await client.get_entity(username)
+    participants = await client.get_participants(chat)
+
+    os.makedirs('static/avatars', exist_ok=True)
+    users_data = []
+
+    for user in participants:
+        user_id = user.id
+        user_dict = {
+            'id': user_id,
+            'username': user.username or '',
+            'first_name': user.first_name or '',
+            'last_name': user.last_name or '',
+            'photo_url': ''
+        }
+
+        avatar_path = f'static/avatars/{user_id}.jpg'
+        if not os.path.exists(avatar_path):
+            try:
+                photos = await client(GetUserPhotosRequest(
+                    user_id=user_id, offset=0, max_id=0, limit=1
+                ))
+                if photos.photos:
+                    file = await client.download_profile_photo(user, file=avatar_path)
+                    if file:
+                        user_dict['photo_url'] = f'/static/avatars/{user_id}.jpg'
+            except Exception as e:
+                logger.warning(f"Не удалось скачать аватарку для {user_id}: {e}")
+        else:
+            user_dict['photo_url'] = f'/static/avatars/{user_id}.jpg'
+
+        users_data.append(user_dict)
+
+    db.upsert_members(chat_id, users_data)
+    logger.info(f"✅ [{slug}] собрано {len(users_data)} участников")
+    return len(users_data)
+
 
 async def collect_users():
-    """Собирает участников чата и обновляет users.json"""
+    """Одной авторизованной сессией обходит все чаты из settings.CHATS."""
     try:
         logger.info("Начинаем сбор участников...")
 
-        client = TelegramClient('session', API_ID, API_HASH)
-
+        client = _make_client()
         await client.start(
             phone=PHONE,
             password=lambda: PASSWORD if PASSWORD else None
         )
 
-        chat = await client.get_entity(CHAT_USERNAME)
-        participants = await client.get_participants(chat)
+        total = 0
+        for chat_cfg in CHATS:
+            try:
+                total += await _collect_one_chat(client, chat_cfg)
+            except Exception as e:
+                logger.error(f"❌ Ошибка сбора чата '{chat_cfg.get('slug')}': {e}")
 
-        # Загружаем существующие данные для сохранения aura
-        existing_users = {}
-        if os.path.exists(USERS_FILE):
-            with open(USERS_FILE, 'r', encoding='utf-8') as f:
-                existing_data = json.load(f)
-                existing_users = {u['id']: u for u in existing_data}
-
-        os.makedirs('static/avatars', exist_ok=True)
-        users_data = []
-
-        for user in participants:
-            user_id = user.id
-
-            # Сохраняем aura, если пользователь уже существует
-            existing_aura = existing_users.get(user_id, {}).get('aura', 0)
-
-            user_dict = {
-                'id': user_id,
-                'username': user.username or '',
-                'first_name': user.first_name or '',
-                'last_name': user.last_name or '',
-                'aura': existing_aura,  # Сохраняем старую aura
-                'photo_url': ''
-            }
-
-            # Скачиваем аватарку только если её ещё нет
-            avatar_path = f'static/avatars/{user_id}.jpg'
-            if not os.path.exists(avatar_path):
-                try:
-                    photos = await client(GetUserPhotosRequest(
-                        user_id=user_id,
-                        offset=0,
-                        max_id=0,
-                        limit=1
-                    ))
-
-                    if photos.photos:
-                        file = await client.download_profile_photo(
-                            user,
-                            file=avatar_path
-                        )
-                        if file:
-                            user_dict['photo_url'] = f'/static/avatars/{user_id}.jpg'
-                except Exception as e:
-                    logger.warning(f"Не удалось скачать аватарку для {user_id}: {e}")
-            else:
-                user_dict['photo_url'] = f'/static/avatars/{user_id}.jpg'
-
-            users_data.append(user_dict)
-
-        with open(USERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(users_data, f, ensure_ascii=False, indent=2)
-
-        logger.info(f"✅ Собрано {len(users_data)} пользователей")
         await client.disconnect()
-
-        return len(users_data)
+        return total
 
     except Exception as e:
         logger.error(f"❌ Ошибка при сборе участников: {e}")
         return None
 
+
 async def auto_collect_loop():
-    """Автоматический сбор каждые 5 минут"""
+    """Автоматический сбор каждые 5 минут по всем чатам сразу."""
     while True:
         try:
             count = await collect_users()
             if count is not None:
-                logger.info(f"Следующее обновление через 5 минут...")
-            await asyncio.sleep(300)  # 5 минут
+                logger.info("Следующее обновление через 5 минут...")
+            await asyncio.sleep(300)
         except Exception as e:
             logger.error(f"Ошибка в цикле автосбора: {e}")
             await asyncio.sleep(300)
 
+
 if __name__ == '__main__':
-    # Для локального запуска - один раз собрать
+    # Для локального запуска - один раз собрать по всем настроенным чатам
+    db.init_db()
     asyncio.run(collect_users())
