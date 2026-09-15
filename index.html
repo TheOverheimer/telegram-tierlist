@@ -441,19 +441,24 @@ h1 {
   <div class="container" id="tierContainer"></div>
 
   <script>
-    // Группы формируются не по величине ауры, а по месту в рейтинге:
-    // ТОП-3 — первые 3 места, ТОП-5 — следующие 5 мест (4-8) и т.д.
-    const GROUPS = [
-      { name: '3', size: 3, class: 'tier-S' },
-      { name: '5', size: 5, class: 'tier-A' },
-      { name: '10', size: 10, class: 'tier-B' },
-      { name: '15', size: 15, class: 'tier-C' },
-      { name: '20', size: 20, class: 'tier-D' },
-      { name: '25', size: 25, class: 'tier-F' },
-      { name: '30', size: 30, class: 'tier-G' }
+    // Тир вычисляется статистически: не по фиксированным очкам и не по фиксированному
+    // месту в рейтинге, а по Z-score — насколько аура пользователя отклоняется от
+    // среднего значения по чату (в единицах стандартного отклонения).
+    // Это классическая "оценка по кривой" (grading on a curve): границы тиров
+    // подстраиваются сами, когда меняется количество участников или общий уровень
+    // очков — новый тир не нужно подбирать руками.
+    //
+    // При нормальном распределении такие границы дают симметричные тиры:
+    // S ~6.7%, A ~9.2%, B ~15%, C ~38.3%, D ~15%, F ~9.2%, G ~6.7%
+    const TIERS = [
+      { name: 'S', label: 'Великолепно', minZ: 1.5,      maxZ: Infinity,  class: 'tier-S' },
+      { name: 'A', label: 'Отлично',      minZ: 1.0,      maxZ: 1.5,       class: 'tier-A' },
+      { name: 'B', label: 'Хорошо',        minZ: 0.5,      maxZ: 1.0,       class: 'tier-B' },
+      { name: 'C', label: 'Средне',        minZ: -0.5,     maxZ: 0.5,       class: 'tier-C' },
+      { name: 'D', label: 'Ниже среднего', minZ: -1.0,     maxZ: -0.5,      class: 'tier-D' },
+      { name: 'F', label: 'Плохо',         minZ: -1.5,     maxZ: -1.0,      class: 'tier-F' },
+      { name: 'G', label: 'Ужасно',        minZ: -Infinity, maxZ: -1.5,     class: 'tier-G' }
     ];
-    // Все, кто не поместился в группы выше
-    const REST_GROUP = { name: 'Остальные', class: 'tier-neutral' };
 
     let voterId = localStorage.getItem('voter_id');
     if (!voterId) {
@@ -508,51 +513,55 @@ h1 {
         tierContainer.innerHTML = '';
 
         // Сервер уже отдаёт пользователей отсортированными по aura (по убыванию),
-        // но сортируем ещё раз на всякий случай, чтобы места считались верно.
+        // но сортируем ещё раз на всякий случай.
         const sortedUsers = [...users].sort((a, b) => (b.aura || 0) - (a.aura || 0));
 
-        // Разбиваем отсортированный список на группы по местам:
-        // ТОП-3 -> места 1-3, ТОП-5 -> места 4-8, ТОП-10 -> места 9-18 и т.д.
-        let cursor = 0;
-        const slices = [];
+        // Считаем среднее и стандартное отклонение по текущей ауре всех участников.
+        // Это и есть "адаптивность": если весь чат за неделю наберёт +5000 ауры,
+        // среднее сдвинется вместе с ними, и тиры не "слипнутся" в один S.
+        const auraValues = sortedUsers.map(u => u.aura || 0);
+        const n = auraValues.length;
+        const mean = n ? auraValues.reduce((a, b) => a + b, 0) / n : 0;
+        const variance = n ? auraValues.reduce((a, b) => a + (b - mean) ** 2, 0) / n : 0;
+        const std = Math.sqrt(variance);
 
-        GROUPS.forEach(group => {
-          if (cursor >= sortedUsers.length) return;
-          const slice = sortedUsers.slice(cursor, cursor + group.size);
-          if (slice.length === 0) return;
-          const startPlace = cursor + 1;
-          const endPlace = cursor + slice.length;
-          slices.push({ ...group, users: slice, startPlace, endPlace });
-          cursor += group.size;
+        // Если у всех одинаковая аура (std = 0), считаем, что все ровно "средние" (z = 0)
+        sortedUsers.forEach(user => {
+          const aura = user.aura || 0;
+          user.__z = std === 0 ? 0 : (aura - mean) / std;
         });
 
-        // Всё, что осталось после ТОП-30, попадает в общую группу "Остальные"
-        if (cursor < sortedUsers.length) {
-          const slice = sortedUsers.slice(cursor);
-          slices.push({
-            ...REST_GROUP,
-            users: slice,
-            startPlace: cursor + 1,
-            endPlace: sortedUsers.length
-          });
-        }
+        const slices = TIERS
+          .map(tier => {
+            const tierUsers = sortedUsers.filter(u => u.__z >= tier.minZ && u.__z < tier.maxZ);
+            if (tierUsers.length === 0) return null;
+            const auras = tierUsers.map(u => u.aura || 0);
+            return {
+              ...tier,
+              users: tierUsers,
+              minAura: Math.min(...auras),
+              maxAura: Math.max(...auras)
+            };
+          })
+          .filter(Boolean);
 
         slices.forEach(group => {
           const section = document.createElement('div');
           section.className = 'tier-section';
 
-          const placeRange = group.startPlace === group.endPlace ?
-            `Место ${group.startPlace}` :
-            `Места ${group.startPlace}–${group.endPlace}`;
+          const auraRange = group.minAura === group.maxAura ?
+            `${group.minAura}` :
+            `${group.minAura} — ${group.maxAura}`;
+          const countLabel = `${group.users.length} чел.`;
 
-          const labelClass = group.name.length > 3 ? 'tier-label small-text' : 'tier-label';
+          const labelClass = 'tier-label';
 
           section.innerHTML = `
             <div class="tier-header">
               <div class="${labelClass} ${group.class}">${group.name}</div>
               <div class="tier-info">
-                <div class="tier-name">${group.name}</div>
-                <div class="tier-range">${placeRange}</div>
+                <div class="tier-name">${group.label}</div>
+                <div class="tier-range">aura: ${auraRange} · ${countLabel}</div>
               </div>
             </div>
             <div class="users-grid" id="tier-${group.name}"></div>
